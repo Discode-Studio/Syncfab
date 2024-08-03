@@ -30,7 +30,7 @@ def send_webhook(url, username, avatar_url, content):
 
 def send_file_webhook(url, username, avatar_url, file_url, content):
     # Format correct de la signature pour éviter les embeds
-    signature = "# sent from [{}]({})".format(username, url)
+    signature = "-# sent from [{}](<{}>)".format(username, url)
     data = {
         "username": username,
         "avatar_url": avatar_url,
