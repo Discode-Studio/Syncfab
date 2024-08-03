@@ -9,11 +9,11 @@ CHANNEL_ID_SERVER_1 = int(os.getenv('CHANNEL_ID_SERVER_1'))
 CHANNEL_ID_SERVER_2 = int(os.getenv('CHANNEL_ID_SERVER_2'))
 
 # Ajouter les variables pour le nom du serveur et le lien d'invitation
-SERVER_NAME_1 = "BlugrayGuy"
-INVITE_LINK_1 = "https://discord.com/invite/8cvwaUACK9"
+SERVER_NAME_2 = "BlugrayGuy"
+INVITE_LINK_2 = "https://discord.com/invite/8cvwaUACK9"
 
-SERVER_NAME_2 = "Elite AstroToilet"
-INVITE_LINK_2 = "https://discord.com/invite/GDdAgRuPFs"
+SERVER_NAME_1 = "Elite AstroToilet"
+INVITE_LINK_1 = "https://discord.com/invite/GDdAgRuPFs"
 
 intents = discord.Intents.default()
 intents.messages = True
