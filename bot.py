@@ -1,6 +1,7 @@
 import discord
 import requests
 import os
+import asyncio
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 WEBHOOK_URL_SERVER_1 = os.getenv('WEBHOOK_URL_SERVER_1')
@@ -18,6 +19,8 @@ INVITE_LINK_1 = "https://discord.com/invite/GDdAgRuPFs"
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
+intents.guilds = True
+intents.members = True
 
 client = discord.Client(intents=intents)
 
@@ -57,6 +60,18 @@ def send_file_webhook(url, username, avatar_url, file_url, content, server_name,
 @client.event
 async def on_ready():
     print(f'Logged in as {client.user}')
+    # Démarrer la tâche pour mettre à jour le statut
+    client.loop.create_task(update_status())
+
+async def update_status():
+    while True:
+        # Calculer le ping du bot
+        latency = round(client.latency * 1000)  # en millisecondes
+        # Calculer le nombre total d'utilisateurs
+        total_users = sum(guild.member_count for guild in client.guilds)
+        # Mettre à jour le statut du bot
+        await client.change_presence(activity=discord.Game(f'Ping: {latency}ms | Users: {total_users}'))
+        await asyncio.sleep(20)  # Mettre à jour toutes les 20 secondes
 
 @client.event
 async def on_message(message):
