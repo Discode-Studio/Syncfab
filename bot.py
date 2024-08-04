@@ -23,6 +23,8 @@ intents.members = True
 
 client = discord.Client(intents=intents)
 
+message_map = {}  # Dictionnaire pour mapper les messages entre les serveurs
+
 def send_webhook(url, username, avatar_url, content):
     data = {
         "username": username,
@@ -34,6 +36,7 @@ def send_webhook(url, username, avatar_url, content):
         result.raise_for_status()
     except requests.exceptions.HTTPError as err:
         print(err)
+    return result.json().get("id")  # Retourne l'ID du message
 
 def send_file_webhook(url, username, avatar_url, file_url, content):
     data = {
@@ -51,6 +54,7 @@ def send_file_webhook(url, username, avatar_url, file_url, content):
         result.raise_for_status()
     except requests.exceptions.HTTPError as err:
         print(err)
+    return result.json().get("id")  # Retourne l'ID du message
 
 @client.event
 async def on_ready():
@@ -78,14 +82,29 @@ async def on_message(message):
     if message.channel.id == CHANNEL_ID_SERVER_1:
         if message.attachments:
             for attachment in message.attachments:
-                send_file_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
+                message_id = send_file_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
         else:
-            send_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), message.content)
+            message_id = send_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), message.content)
+        message_map[message.id] = (CHANNEL_ID_SERVER_2, message_id)
+
     elif message.channel.id == CHANNEL_ID_SERVER_2:
         if message.attachments:
             for attachment in message.attachments:
-                send_file_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
+                message_id = send_file_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
         else:
-            send_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), message.content)
+            message_id = send_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), message.content)
+        message_map[message.id] = (CHANNEL_ID_SERVER_1, message_id)
+
+@client.event
+async def on_message_delete(message):
+    if message.id in message_map:
+        channel_id, msg_id = message_map[message.id]
+        channel = client.get_channel(channel_id)
+        try:
+            msg_to_delete = await channel.fetch_message(msg_id)
+            await msg_to_delete.delete()
+        except discord.NotFound:
+            pass  # Si le message n'est pas trouvé, il a probablement déjà été supprimé
+        del message_map[message.id]
 
 client.run(BOT_TOKEN)
