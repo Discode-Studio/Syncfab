@@ -9,7 +9,6 @@ WEBHOOK_URL_SERVER_2 = os.getenv('WEBHOOK_URL_SERVER_2')
 CHANNEL_ID_SERVER_1 = int(os.getenv('CHANNEL_ID_SERVER_1'))
 CHANNEL_ID_SERVER_2 = int(os.getenv('CHANNEL_ID_SERVER_2'))
 
-# Ajouter les variables pour le nom du serveur et le lien d'invitation
 SERVER_NAME_2 = "BlugrayGuy"
 INVITE_LINK_2 = "https://discord.com/invite/8cvwaUACK9"
 
@@ -24,13 +23,11 @@ intents.members = True
 
 client = discord.Client(intents=intents)
 
-def send_webhook(url, username, avatar_url, content, server_name, invite_link):
-    # Formater la signature avec le nom du serveur et le lien d'invitation
-    signature = f"-# sent from [{server_name}](<{invite_link}>)"
+def send_webhook(url, username, avatar_url, content):
     data = {
         "username": username,
         "avatar_url": avatar_url,
-        "content": f"{content}\n{signature}"
+        "content": content
     }
     result = requests.post(url, json=data)
     try:
@@ -38,13 +35,11 @@ def send_webhook(url, username, avatar_url, content, server_name, invite_link):
     except requests.exceptions.HTTPError as err:
         print(err)
 
-def send_file_webhook(url, username, avatar_url, file_url, content, server_name, invite_link):
-    # Formater la signature avec le nom du serveur et le lien d'invitation
-    signature = f"-# sent from [{server_name}](<{invite_link}>)"
+def send_file_webhook(url, username, avatar_url, file_url, content):
     data = {
         "username": username,
         "avatar_url": avatar_url,
-        "content": f"{content}\n{signature}",
+        "content": content,
         "embeds": [{
             "image": {
                 "url": file_url
@@ -60,27 +55,37 @@ def send_file_webhook(url, username, avatar_url, file_url, content, server_name,
 @client.event
 async def on_ready():
     print(f'Logged in as {client.user}')
-    # Démarrer la tâche pour mettre à jour le statut
     client.loop.create_task(update_status())
 
 async def update_status():
     while True:
-        # Calculer le ping du bot
-        latency = round(client.latency * 1000)  # en millisecondes
-        # Calculer le nombre total d'utilisateurs
+        latency = round(client.latency * 1000)
         total_users = sum(guild.member_count for guild in client.guilds)
-        # Mettre à jour le statut du bot
         await client.change_presence(activity=discord.Game(f'Ping: {latency}ms | Users: {total_users}'))
-        await asyncio.sleep(20)  # Mettre à jour toutes les 20 secondes
+        await asyncio.sleep(20)
 
 @client.event
 async def on_message(message):
     if message.author.bot:
         return
 
+    # Bloquer les mentions @everyone et @here sauf pour les modérateurs
+    if any(mention in message.content for mention in ["@everyone", "@here"]) and not message.author.guild_permissions.administrator:
+        await message.delete()
+        await message.channel.send(f"{message.author.mention}, you are not allowed to use @everyone or @here mentions.", delete_after=10)
+        return
+
     if message.channel.id == CHANNEL_ID_SERVER_1:
-        send_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), message.content, SERVER_NAME_2, INVITE_LINK_2)
+        if message.attachments:
+            for attachment in message.attachments:
+                send_file_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
+        else:
+            send_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), message.content)
     elif message.channel.id == CHANNEL_ID_SERVER_2:
-        send_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), message.content, SERVER_NAME_1, INVITE_LINK_1)
+        if message.attachments:
+            for attachment in message.attachments:
+                send_file_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
+        else:
+            send_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), message.content)
 
 client.run(BOT_TOKEN)
