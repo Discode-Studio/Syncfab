@@ -31,4 +31,6 @@ jobs:
           WEBHOOK_URL_SERVER_2: ${{ secrets.WEBHOOK_URL_SERVER_2 }}
           CHANNEL_ID_SERVER_1: ${{ secrets.CHANNEL_ID_SERVER_1 }}
           CHANNEL_ID_SERVER_2: ${{ secrets.CHANNEL_ID_SERVER_2 }}
+          WEBHOOK_URL_SERVER_3: ${{ secrets.WEBHOOK_URL_SERVER_3 }}
+          CHANNEL_ID_SERVER_3: ${{ secrets.CHANNEL_ID_SERVER_3 }}
         run: python bot.py
