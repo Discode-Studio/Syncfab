@@ -12,15 +12,6 @@ CHANNEL_ID_SERVER_1 = int(os.getenv('CHANNEL_ID_SERVER_1'))
 CHANNEL_ID_SERVER_2 = int(os.getenv('CHANNEL_ID_SERVER_2'))
 CHANNEL_ID_SERVER_3 = int(os.getenv('CHANNEL_ID_SERVER_3'))
 
-SERVER_NAME_1 = "Elite AstroToilet"
-INVITE_LINK_1 = "https://discord.com/invite/GDdAgRuPFs"
-
-SERVER_NAME_2 = "BlugrayGuy"
-INVITE_LINK_2 = "https://discord.com/invite/8cvwaUACK9"
-
-SERVER_NAME_3 = "GoofYZ's Little Sigma"
-INVITE_LINK_3 = "https://discord.gg/WjPm5Eq78U"
-
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
@@ -33,28 +24,30 @@ message_map = {}  # {source_message_id: [(webhook_url, message_id), ...]}
 
 
 def send_webhook(url, username, avatar_url, content):
-    data = {"username": username, "avatar_url": avatar_url, "content": content}
-    result = requests.post(url, json=data)
     try:
+        data = {"username": username, "avatar_url": avatar_url, "content": content}
+        result = requests.post(url, json=data)
         result.raise_for_status()
-    except requests.exceptions.HTTPError as err:
-        print(err)
-    return result.json().get("id")
+        return result.json().get("id")
+    except Exception as e:
+        print(f"Error sending webhook to {url}: {e}")
+        return None
 
 
 def send_file_webhook(url, username, avatar_url, file_url, content):
-    data = {
-        "username": username,
-        "avatar_url": avatar_url,
-        "content": content,
-        "embeds": [{"image": {"url": file_url}}],
-    }
-    result = requests.post(url, json=data)
     try:
+        data = {
+            "username": username,
+            "avatar_url": avatar_url,
+            "content": content,
+            "embeds": [{"image": {"url": file_url}}],
+        }
+        result = requests.post(url, json=data)
         result.raise_for_status()
-    except requests.exceptions.HTTPError as err:
-        print(err)
-    return result.json().get("id")
+        return result.json().get("id")
+    except Exception as e:
+        print(f"Error sending file webhook to {url}: {e}")
+        return None
 
 
 @client.event
@@ -81,7 +74,7 @@ async def on_message(message):
     if any(mention in message.content for mention in ["@everyone", "@here"]) and not message.author.guild_permissions.administrator:
         await message.delete()
         await message.channel.send(
-            f"{message.author.mention}, you are not allowed to use @everyone or @here mentions.",
+            f"{message.author.mention}, you are not allowed to use everyone or here mentions.",
             delete_after=10,
         )
         return
@@ -106,7 +99,8 @@ async def on_message(message):
                         attachment.url,
                         message.content,
                     )
-                    sent_messages.append((url, msg_id))
+                    if msg_id:
+                        sent_messages.append((url, msg_id))
             else:
                 msg_id = send_webhook(
                     url,
@@ -114,8 +108,11 @@ async def on_message(message):
                     str(message.author.avatar.url),
                     message.content,
                 )
-                sent_messages.append((url, msg_id))
-        message_map[message.id] = sent_messages
+                if msg_id:
+                    sent_messages.append((url, msg_id))
+
+        if sent_messages:
+            message_map[message.id] = sent_messages
 
 
 @client.event
