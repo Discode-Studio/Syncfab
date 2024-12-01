@@ -6,14 +6,20 @@ import asyncio
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 WEBHOOK_URL_SERVER_1 = os.getenv('WEBHOOK_URL_SERVER_1')
 WEBHOOK_URL_SERVER_2 = os.getenv('WEBHOOK_URL_SERVER_2')
+WEBHOOK_URL_SERVER_3 = os.getenv('WEBHOOK_URL_SERVER_3')  # Webhook du serveur 3
+
 CHANNEL_ID_SERVER_1 = int(os.getenv('CHANNEL_ID_SERVER_1'))
 CHANNEL_ID_SERVER_2 = int(os.getenv('CHANNEL_ID_SERVER_2'))
+CHANNEL_ID_SERVER_3 = int(os.getenv('CHANNEL_ID_SERVER_3'))  # ID du channel du serveur 3
+
+SERVER_NAME_1 = "Elite AstroToilet"
+INVITE_LINK_1 = "https://discord.com/invite/GDdAgRuPFs"
 
 SERVER_NAME_2 = "BlugrayGuy"
 INVITE_LINK_2 = "https://discord.com/invite/8cvwaUACK9"
 
-SERVER_NAME_1 = "Elite AstroToilet"
-INVITE_LINK_1 = "https://discord.com/invite/GDdAgRuPFs"
+SERVER_NAME_3 = "GoofYZ's Little Sigma"
+INVITE_LINK_3 = "https://discord.gg/WjPm5Eq78U"  # Remplace par le lien d'invitation
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -79,32 +85,32 @@ async def on_message(message):
         await message.channel.send(f"{message.author.mention}, you are not allowed to use @everyone or @here mentions.", delete_after=10)
         return
 
+    # Synchronisation des messages entre les trois serveurs
     if message.channel.id == CHANNEL_ID_SERVER_1:
-        if message.attachments:
-            for attachment in message.attachments:
-                message_id = send_file_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
-        else:
-            message_id = send_webhook(WEBHOOK_URL_SERVER_2, message.author.display_name, str(message.author.avatar.url), message.content)
-        message_map[message.id] = (CHANNEL_ID_SERVER_2, message_id)
-
+        webhook_urls = [WEBHOOK_URL_SERVER_2, WEBHOOK_URL_SERVER_3]
     elif message.channel.id == CHANNEL_ID_SERVER_2:
+        webhook_urls = [WEBHOOK_URL_SERVER_1, WEBHOOK_URL_SERVER_3]
+    elif message.channel.id == CHANNEL_ID_SERVER_3:
+        webhook_urls = [WEBHOOK_URL_SERVER_1, WEBHOOK_URL_SERVER_2]
+    else:
+        return
+
+    for url in webhook_urls:
         if message.attachments:
             for attachment in message.attachments:
-                message_id = send_file_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
+                message_id = send_file_webhook(url, message.author.display_name, str(message.author.avatar.url), attachment.url, message.content)
         else:
-            message_id = send_webhook(WEBHOOK_URL_SERVER_1, message.author.display_name, str(message.author.avatar.url), message.content)
-        message_map[message.id] = (CHANNEL_ID_SERVER_1, message_id)
+            message_id = send_webhook(url, message.author.display_name, str(message.author.avatar.url), message.content)
+        message_map[message.id] = (url, message_id)
 
 @client.event
 async def on_message_delete(message):
     if message.id in message_map:
-        channel_id, msg_id = message_map[message.id]
-        channel = client.get_channel(channel_id)
+        url, msg_id = message_map[message.id]
         try:
-            msg_to_delete = await channel.fetch_message(msg_id)
-            await msg_to_delete.delete()
-        except discord.NotFound:
-            pass  # Si le message n'est pas trouvé, il a probablement déjà été supprimé
+            requests.delete(f"{url}/messages/{msg_id}")
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to delete message {msg_id} from webhook: {e}")
         del message_map[message.id]
 
 client.run(BOT_TOKEN)
