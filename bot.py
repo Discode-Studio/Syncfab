@@ -1,12 +1,8 @@
 import discord
-import requests
 import os
 import asyncio
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-WEBHOOK_URL_SERVER_1 = os.getenv('WEBHOOK_URL_SERVER_1')
-WEBHOOK_URL_SERVER_2 = os.getenv('WEBHOOK_URL_SERVER_2')
-WEBHOOK_URL_SERVER_3 = os.getenv('WEBHOOK_URL_SERVER_3')
 
 CHANNEL_ID_SERVER_1 = int(os.getenv('CHANNEL_ID_SERVER_1'))
 CHANNEL_ID_SERVER_2 = int(os.getenv('CHANNEL_ID_SERVER_2'))
@@ -15,63 +11,28 @@ CHANNEL_ID_SERVER_3 = int(os.getenv('CHANNEL_ID_SERVER_3'))
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
-intents.guilds = True
 intents.reactions = True
 
 client = discord.Client(intents=intents)
 
-# Map messages across servers: {source_message_id: [(webhook_url, message_id), ...]}
-message_map = {}
+channel_map = {
+    CHANNEL_ID_SERVER_1: [CHANNEL_ID_SERVER_2, CHANNEL_ID_SERVER_3],
+    CHANNEL_ID_SERVER_2: [CHANNEL_ID_SERVER_1, CHANNEL_ID_SERVER_3],
+    CHANNEL_ID_SERVER_3: [CHANNEL_ID_SERVER_1, CHANNEL_ID_SERVER_2],
+}
 
 
-def send_webhook(url, username, avatar_url, content, embed=None):
+async def broadcast_message(source_channel_id, message_content):
     """
-    Sends a message using a webhook and returns the ID of the message sent.
+    Broadcasts a message to all other linked channels.
     """
-    try:
-        data = {"username": username, "avatar_url": avatar_url, "content": content}
-        if embed:
-            data["embeds"] = [embed]
-        result = requests.post(url, json=data)
-        result.raise_for_status()
-        return result.json().get("id")
-    except Exception as e:
-        print(f"Error sending webhook to {url}: {e}")
-        return None
+    if source_channel_id not in channel_map:
+        return
 
-
-def edit_webhook_message(url, message_id, content):
-    """
-    Edits a webhook message.
-    """
-    try:
-        data = {"content": content}
-        requests.patch(f"{url}/messages/{message_id}", json=data)
-    except Exception as e:
-        print(f"Error editing message {message_id}: {e}")
-
-
-def delete_webhook_message(url, message_id):
-    """
-    Deletes a webhook message.
-    """
-    try:
-        requests.delete(f"{url}/messages/{message_id}")
-    except Exception as e:
-        print(f"Error deleting message {message_id}: {e}")
-
-
-def react_to_webhook_message(url, message_id, emoji, action="add"):
-    """
-    Adds or removes a reaction from a webhook message.
-    """
-    try:
-        if action == "add":
-            requests.put(f"{url}/messages/{message_id}/reactions/{emoji}/@me")
-        elif action == "remove":
-            requests.delete(f"{url}/messages/{message_id}/reactions/{emoji}/@me")
-    except Exception as e:
-        print(f"Error managing reaction {emoji} on message {message_id}: {e}")
+    for channel_id in channel_map[source_channel_id]:
+        channel = client.get_channel(channel_id)
+        if channel:
+            await channel.send(message_content)
 
 
 @client.event
@@ -84,64 +45,44 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Determine which webhooks to send to
-    webhook_urls = []
-    if message.channel.id == CHANNEL_ID_SERVER_1:
-        webhook_urls = [WEBHOOK_URL_SERVER_2, WEBHOOK_URL_SERVER_3]
-    elif message.channel.id == CHANNEL_ID_SERVER_2:
-        webhook_urls = [WEBHOOK_URL_SERVER_1, WEBHOOK_URL_SERVER_3]
-    elif message.channel.id == CHANNEL_ID_SERVER_3:
-        webhook_urls = [WEBHOOK_URL_SERVER_1, WEBHOOK_URL_SERVER_2]
-
-    # Send message via webhooks
-    sent_messages = []
-    for url in webhook_urls:
-        embed = None
-        if message.reference and message.reference.message_id in message_map:
-            referenced_message = message_map[message.reference.message_id][0]
-            embed = {"description": f"Réponse à : {referenced_message}"}
-
-        msg_id = send_webhook(
-            url,
-            username=message.author.display_name,
-            avatar_url=str(message.author.avatar.url),
-            content=message.content,
-            embed=embed,
-        )
-        if msg_id:
-            sent_messages.append((url, msg_id))
-
-    if sent_messages:
-        message_map[message.id] = sent_messages
+    # Handle reply
+    if message.reference:
+        replied_message = await message.channel.fetch_message(message.reference.message_id)
+        if replied_message:
+            content = (
+                f"**{message.author.display_name} replied to {replied_message.author.display_name}:**\n"
+                f"> {replied_message.content}\n\n"
+                f"{message.content}"
+            )
+            await broadcast_message(message.channel.id, content)
+    else:
+        # Broadcast regular messages (optional)
+        pass
 
 
 @client.event
 async def on_message_edit(before, after):
-    if after.id in message_map:
-        for url, msg_id in message_map[after.id]:
-            edit_webhook_message(url, msg_id, after.content)
+    if before.author.bot:
+        return
+
+    content = (
+        f"**{before.author.display_name} edited a message:**\n"
+        f"Before: {before.content}\n"
+        f"After: {after.content}"
+    )
+    await broadcast_message(before.channel.id, content)
 
 
 @client.event
 async def on_message_delete(message):
-    if message.id in message_map:
-        for url, msg_id in message_map[message.id]:
-            delete_webhook_message(url, msg_id)
-        del message_map[message.id]
+    if message.author.bot:
+        return
 
-
-@client.event
-async def on_reaction_add(reaction, user):
-    if reaction.message.id in message_map:
-        for url, msg_id in message_map[reaction.message.id]:
-            react_to_webhook_message(url, msg_id, reaction.emoji, action="add")
-
-
-@client.event
-async def on_reaction_remove(reaction, user):
-    if reaction.message.id in message_map:
-        for url, msg_id in message_map[reaction.message.id]:
-            react_to_webhook_message(url, msg_id, reaction.emoji, action="remove")
+    content = (
+        f"**{message.author.display_name} deleted a message:**\n"
+        f"Content: {message.content}"
+    )
+    await broadcast_message(message.channel.id, content)
 
 
 client.run(BOT_TOKEN)
