@@ -126,4 +126,31 @@ async def on_message_delete(message):
         del message_map[message.id]
 
 
+@client.event
+async def on_message_edit(before, after):
+    if after.id in message_map:
+        for url, msg_id in message_map[after.id]:
+            send_webhook(
+                url,
+                after.author.display_name,
+                str(after.author.avatar.url),
+                after.content,
+            )
+
+
+@client.event
+async def on_message_reaction_add(reaction, user):
+    if reaction.message.reference:
+        replied_to = reaction.message.reference.resolved
+        if replied_to and replied_to.id in message_map:
+            original_messages = message_map[replied_to.id]
+            for url, msg_id in original_messages:
+                send_webhook(
+                    url,
+                    user.display_name,
+                    str(user.avatar.url),
+                    f"Réponse à : {replied_to.content}\n\n{reaction.message.content}",
+                )
+
+
 client.run(BOT_TOKEN)
