@@ -63,7 +63,7 @@ async def on_message(message):
                     content = f"{message.content}"
             else:
                 # Message normal
-                content = f"{message.author.display_name}: {message.content}"
+                content = f"{message.content}"
 
             send_webhook(webhook_url, message.author.display_name, str(message.author.avatar.url), content)
 
