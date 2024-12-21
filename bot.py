@@ -17,15 +17,23 @@ intents.messages = True
 intents.message_content = True
 intents.guilds = True
 intents.members = True
+intents.reactions = True
 
 client = discord.Client(intents=intents)
 
 message_map = {}  # {source_message_id: [(webhook_url, message_id), ...]}
 
 
-def send_webhook(url, username, avatar_url, content):
+def send_webhook(url, username, avatar_url, content, reply_to=None):
     try:
         data = {"username": username, "avatar_url": avatar_url, "content": content}
+        if reply_to:
+            data["embeds"] = [
+                {
+                    "description": f"Réponse à : {reply_to}",
+                    "color": 3447003,  # Optional embed color
+                }
+            ]
         result = requests.post(url, json=data)
         result.raise_for_status()
         return result.json().get("id")
@@ -34,7 +42,7 @@ def send_webhook(url, username, avatar_url, content):
         return None
 
 
-def send_file_webhook(url, username, avatar_url, file_url, content):
+def send_file_webhook(url, username, avatar_url, file_url, content, reply_to=None):
     try:
         data = {
             "username": username,
@@ -42,6 +50,8 @@ def send_file_webhook(url, username, avatar_url, file_url, content):
             "content": content,
             "embeds": [{"image": {"url": file_url}}],
         }
+        if reply_to:
+            data["embeds"].insert(0, {"description": f"Réponse à : {reply_to}"})
         result = requests.post(url, json=data)
         result.raise_for_status()
         return result.json().get("id")
@@ -71,14 +81,6 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if any(mention in message.content for mention in ["@everyone", "@here"]) and not message.author.guild_permissions.administrator:
-        await message.delete()
-        await message.channel.send(
-            f"{message.author.mention}, you are not allowed to use everyone or here mentions.",
-            delete_after=10,
-        )
-        return
-
     webhook_urls = []
     if message.channel.id == CHANNEL_ID_SERVER_1:
         webhook_urls = [WEBHOOK_URL_SERVER_2, WEBHOOK_URL_SERVER_3]
@@ -86,6 +88,10 @@ async def on_message(message):
         webhook_urls = [WEBHOOK_URL_SERVER_1, WEBHOOK_URL_SERVER_3]
     elif message.channel.id == CHANNEL_ID_SERVER_3:
         webhook_urls = [WEBHOOK_URL_SERVER_1, WEBHOOK_URL_SERVER_2]
+
+    reply_to = None
+    if message.reference and message.reference.message_id in message_map:
+        reply_to = f"{message.reference.resolved.content}"
 
     if webhook_urls:
         sent_messages = []
@@ -98,6 +104,7 @@ async def on_message(message):
                         str(message.author.avatar.url),
                         attachment.url,
                         message.content,
+                        reply_to,
                     )
                     if msg_id:
                         sent_messages.append((url, msg_id))
@@ -107,6 +114,7 @@ async def on_message(message):
                     message.author.display_name,
                     str(message.author.avatar.url),
                     message.content,
+                    reply_to,
                 )
                 if msg_id:
                     sent_messages.append((url, msg_id))
@@ -130,27 +138,33 @@ async def on_message_delete(message):
 async def on_message_edit(before, after):
     if after.id in message_map:
         for url, msg_id in message_map[after.id]:
-            send_webhook(
-                url,
-                after.author.display_name,
-                str(after.author.avatar.url),
-                after.content,
-            )
+            try:
+                data = {"content": after.content}
+                requests.patch(f"{url}/messages/{msg_id}", json=data)
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to edit message {msg_id} from webhook: {e}")
 
 
 @client.event
-async def on_message_reaction_add(reaction, user):
-    if reaction.message.reference:
-        replied_to = reaction.message.reference.resolved
-        if replied_to and replied_to.id in message_map:
-            original_messages = message_map[replied_to.id]
-            for url, msg_id in original_messages:
-                send_webhook(
-                    url,
-                    user.display_name,
-                    str(user.avatar.url),
-                    f"Réponse à : {replied_to.content}\n\n{reaction.message.content}",
-                )
+async def on_reaction_add(reaction, user):
+    if reaction.message.id in message_map:
+        for url, msg_id in message_map[reaction.message.id]:
+            try:
+                emoji = reaction.emoji
+                requests.put(f"{url}/messages/{msg_id}/reactions/{emoji}/@me")
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to add reaction {emoji} to message {msg_id}: {e}")
+
+
+@client.event
+async def on_reaction_remove(reaction, user):
+    if reaction.message.id in message_map:
+        for url, msg_id in message_map[reaction.message.id]:
+            try:
+                emoji = reaction.emoji
+                requests.delete(f"{url}/messages/{msg_id}/reactions/{emoji}/@me")
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to remove reaction {emoji} from message {msg_id}: {e}")
 
 
 client.run(BOT_TOKEN)
