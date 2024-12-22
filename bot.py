@@ -54,6 +54,36 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # Commande "sn!talk" réservée à l'utilisateur avec l'ID spécifié
+    if isinstance(message.channel, discord.DMChannel) and message.author.id == 659349596534734856:
+        if message.content.startswith("sn!talk"):
+            args = message.content.split()
+            if len(args) < 4:
+                await message.channel.send("Usage : `sn!talk (serverid) (channelid) (message)`")
+                return
+
+            server_id = int(args[1])
+            channel_id = int(args[2])
+            msg_content = " ".join(args[3:])
+
+            guild = client.get_guild(server_id)
+            if not guild:
+                await message.channel.send("Serveur introuvable.")
+                return
+
+            channel = guild.get_channel(channel_id)
+            if not channel:
+                await message.channel.send("Salon introuvable.")
+                return
+
+            try:
+                await channel.send(msg_content)
+                await message.channel.send("Message envoyé avec succès.")
+            except Exception as e:
+                await message.channel.send(f"Erreur lors de l'envoi du message : {e}")
+                return
+
+    # Gestion des webhooks
     if message.channel.id in webhook_map:
         files = []
 
