@@ -23,7 +23,7 @@ jobs:
         run: |
           sudo apt update && sudo apt install python3.12
           pip install discord.py requests
-          pip install audioop
+          apt-get install audioop
 
       - name: Run sync script
         env:
