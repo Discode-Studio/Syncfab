@@ -21,8 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pyenv install 3.12.2
-          pyenv global 3.12.2
+          sudo apt update && sudo apt install python3.12
           pip install discord.py requests
           pip install audioop
 
